@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portal Kampus Fiktif (RENTAN - Latihan M5)</title>
+<style>
+  * { box-sizing: border-box; font-family: system-ui, Arial, sans-serif; }
+  body { margin: 0; background: #eef3fb; color: #172033; }
+  header { background: #0b1f3a; color: #fff; padding: 16px 24px; }
+  header h1 { margin: 0; font-size: 1.3rem; }
+  header small { color: #ffd166; }
+  main { max-width: 900px; margin: 24px auto; padding: 0 16px; }
+  .card { background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; padding: 20px; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(8,21,39,.06); }
+  label { display: block; font-weight: 700; margin: 8px 0 4px; }
+  input, textarea, button { font: inherit; padding: 8px 10px; border: 1px solid #94a3b8; border-radius: 6px; width: 100%; }
+  button { background: #0b1f3a; color: #fff; border: 0; cursor: pointer; margin-top: 10px; min-height: 40px; font-weight: 700; }
+  button.danger { background: #b42318; }
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; }
+  th { background: #e8eef5; }
+  .warn { background: #fff3cd; border-left: 4px solid #b45309; padding: 10px; margin-bottom: 16px; }
+  .nav { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .nav a { padding: 8px 12px; background: #0b1f3a; color: #fff; text-decoration: none; border-radius: 6px; font-weight: 700; }
+  .hidden { display: none; }
+  .muted { color: #52627a; font-size: .9rem; }
+  .discussion-post { border-left: 4px solid #22d3ee; background: #f7fcff; padding: 10px; margin: 8px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Portal Kampus Fiktif · Latihan M5</h1>
+  <small>⚠️ Aplikasi SENGAJA RENTAN untuk praktikum. Data sintetis. Jangan pakai data nyata.</small>
+</header>
+
+<main>
+  <div class="warn">
+    <strong>Peringatan:</strong> Portal ini dibuat untuk praktikum Keamanan Sistem Informasi. Semua akun dan nilai adalah data fiktif. Kerentanan disengaja: <em>SQL injection</em>, <em>Stored XSS</em>, dan <em>IDOR</em>.
+  </div>
+
+  <div class="card">
+    <h2>Navigasi</h2>
+    <div class="nav">
+      <a href="#login">Login</a>
+      <a href="#dashboard">Dashboard Nilai</a>
+      <a href="#forum">Forum Diskusi</a>
+    </div>
+  </div>
+
+  <!-- LOGIN (SQL Injection vulnerable) -->
+  <section id="login" class="card">
+    <h2>Login Mahasiswa</h2>
+    <input id="npm" placeholder="Contoh: 24781072">
+    <label for="pwd">Password</label>
+    <input id="pwd" type="password" placeholder="Password">
+    <button onclick="login()">Masuk</button>
+    <div id="loginOut" style="margin-top:12px"></div>
+  </section>
+
+  <!-- DASHBOARD (IDOR vulnerable) -->
+  <section id="dashboard" class="card">
+    <h2>Dashboard Nilai Mahasiswa</h2>
+    <label for="userId">ID Mahasiswa</label>
+    <input id="userId" type="number" value="1" min="1">
+    <button onclick="loadGrades()">Lihat Nilai</button>
+    <div id="gradesOut" style="margin-top:12px"></div>
+  </section>
+
+  <!-- FORUM (Stored XSS vulnerable) -->
+  <section id="forum" class="card">
+    <h2>Forum Diskusi Kelas</h2>
+
+    <input id="nama" placeholder="Nama kamu">
+    <label for="komentar">Komentar</label>
+    <textarea id="komentar" rows="3" placeholder="Tulis komentar..."></textarea>
+    <button onclick="postComment()">Kirim</button>
+    <div id="forumList" style="margin-top:16px"></div>
+  </section>
+</main>
+
+<script>
+// ===== "DATABASE" SINTETIS (disimpan di memori) =====
+const MAHASISWA = [
+  { id: 1, npm: "24781072", password: "rahasia123", nama: "Mahasiswa Satu", nilai: [{ mk: "Keamanan Sistem Informasi", sks: 3, nilai: "A" }, { mk: "Basis Data", sks: 3, nilai: "B+" }] },
+  { id: 2, npm: "24781073", password: "rahasia456", nama: "Mahasiswa Dua", nilai: [{ mk: "Keamanan Sistem Informasi", sks: 3, nilai: "B" }, { mk: "Basis Data", sks: 3, nilai: "A" }] },
+  { id: 3, npm: "24781074", password: "rahasia789", nama: "Mahasiswa Tiga", nilai: [{ mk: "Keamanan Sistem Informasi", sks: 3, nilai: "C+" }, { mk: "Basis Data", sks: 3, nilai: "B" }] }
+];
+
+const KOMENTAR = [
+  { nama: "Dosen", komentar: "Selamat datang di forum kelas. Gunakan bahasa yang sopan." }
+];
+
+// ===== LOGIN (RENTAN: SQL injection lewat string concat) =====
+function login() {
+  const npm = document.getElementById("npm").value;
+  const pwd = document.getElementById("pwd").value;
+
+  // SIMULASI QUERY RENTAN: SELECT * FROM mahasiswa WHERE npm = '<npm>' AND password = '<pwd>'
+  // Karena pakai concatenation, payload ' OR '1'='1 akan membuat kondisi selalu true.
+  const query = "SELECT * FROM mahasiswa WHERE npm = '" + npm + "' AND password = '" + pwd + "'";
+
+  // Parser sederhana: kalau input mengandung ' OR '1'='1 -> bypass
+  let hasil = null;
+  if (/'\s*or\s*'1'\s*=\s*'1/i.test(npm) || /'\s*or\s*'1'\s*=\s*'1/i.test(pwd)) {
+    hasil = MAHASISWA[0]; // login sebagai user pertama (bypass)
+  } else {
+    hasil = MAHASISWA.find(m => m.npm === npm && m.password === pwd);
+  }
+
+  const out = document.getElementById("loginOut");
+  if (hasil) {
+    out.innerHTML = '<p style="color:#087f5b"><strong>Login berhasil.</strong> Selamat datang, ' + hasil.nama + ' (NPM ' + hasil.npm + ').</p><p class="muted">Query dieksekusi: <code>' + escapeHtml(query) + '</code></p>';
+  } else {
+    out.innerHTML = '<p style="color:#b42318">Login gagal. NPM atau password salah.</p><p class="muted">Query dieksekusi: <code>' + escapeHtml(query) + '</code></p>';
+  }
+}
+
+// ===== DASHBOARD (RENTAN: IDOR — tidak ada cek kepemilikan) =====
+function loadGrades() {
+  const id = Number(document.getElementById("userId").value);
+  const m = MAHASISWA.find(x => x.id === id);
+  const out = document.getElementById("gradesOut");
+  if (!m) { out.innerHTML = "<p>Tidak ditemukan.</p>"; return; }
+  // TIDAK ADA CEK: siapa yang login, apakah dia berhak lihat data ini.
+  let html = '<h3>Nilai ' + m.nama + ' (NPM ' + m.npm + ')</h3>';
+  html += '<table><thead><tr><th>Mata Kuliah</th><th>SKS</th><th>Nilai</th></tr></thead><tbody>';
+  m.nilai.forEach(n => { html += '<tr><td>' + n.mk + '</td><td>' + n.sks + '</td><td>' + n.nilai + '</td></tr>'; });
+  html += '</tbody></table>';
+  out.innerHTML = html;
+}
+
+// ===== FORUM (RENTAN: Stored XSS — innerHTML tanpa escape) =====
+function postComment() {
+  const nama = document.getElementById("nama").value || "Anonim";
+  const komentar = document.getElementById("komentar").value;
+  if (!komentar.trim()) return;
+  KOMENTAR.push({ nama: nama, komentar: komentar });
+  renderForum();
+  document.getElementById("komentar").value = "";
+}
+
+function renderForum() {
+  const list = document.getElementById("forumList");
+  // RENTAN: komentar dimasukkan sebagai innerHTML mentah -> <script> berjalan.
+  list.innerHTML = KOMENTAR.map(k => '<div class="discussion-post"><strong>' + k.nama + '</strong><p>' + k.komentar + '</p></div>').join("");
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// Routing hash sederhana
+function route() {
+  const h = location.hash || "#login";
+  ["#login", "#dashboard", "#forum"].forEach(id => {
+    document.querySelector(id).style.display = (id === h ? "block" : "none");
+  });
+}
+window.addEventListener("hashchange", route);
+route();
+renderForum();
+</script>
+</body>
+</html>
